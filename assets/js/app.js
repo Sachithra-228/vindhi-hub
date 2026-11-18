@@ -238,7 +238,7 @@
     store.save(done);
     updateProgress();
     const after = chapterComplete();
-    renderChapters();
+    renderChapterBody();
     renderPapers();
     const again = document.querySelector(`[data-done="${id}"]`);
     if (again) again.focus({ preventScroll: true }); // keep keyboard focus after re-render
@@ -277,42 +277,6 @@
           <a class="btn sm ghost" href="${encodeURI(r.file)}" download aria-label="Download ${esc(r.title)}">${icon.dl}</a>
         </div>
       </li>`;
-  }
-
-  const state = { q: '', f: 'all' };
-
-  function matches(c, r) {
-    if (state.f !== 'all' && r.type !== state.f) return false;
-    if (!state.q) return true;
-    const hay = `${c.title} ${c.topics.join(' ')} ${c.blurb} ${r.title} ${r.type} chapter ${c.n} ch${c.n} ${r.type === T ? 'tutorial tut' : 'notes lecture'}`.toLowerCase();
-    return state.q.split(/\s+/).every((w) => hay.includes(w));
-  }
-
-  function renderChapters() {
-    const out = [];
-    CHAPTERS.forEach((c) => {
-      const all = RESOURCES.filter((r) => r.ch === c.n);
-      const shown = all.filter((r) => matches(c, r));
-      if (!shown.length) return;
-      const d = all.filter((r) => done.has(r.id)).length;
-      const complete = d === all.length;
-      out.push(`
-        <li class="chapter ${complete ? 'is-complete' : ''}" id="ch-${c.n}">
-          <div class="node" aria-hidden="true"><span>${c.n}</span></div>
-          <article class="ch-card" data-sym="${esc(c.sym)}">
-            <div class="ch-head">
-              <h3 class="ch-title">${esc(c.title)}</h3>
-              <span class="ch-count">${d}/${all.length} done</span>
-            </div>
-            <p class="ch-blurb">${esc(c.blurb)}</p>
-            <div class="topics">${c.topics.map((t) => `<span class="topic">${esc(t)}</span>`).join('')}</div>
-            <div class="bar" role="progressbar" aria-label="Chapter ${c.n} progress" aria-valuemin="0" aria-valuemax="${all.length}" aria-valuenow="${d}"><i style="width:${(d / all.length) * 100}%"></i></div>
-            <ul class="res-list">${shown.map((r) => resRow(r)).join('')}</ul>
-          </article>
-        </li>`);
-    });
-    $('#journey').innerHTML = out.join('');
-    $('#empty').hidden = out.length > 0;
   }
 
   function renderPapers() {
@@ -393,6 +357,25 @@
   document.addEventListener('click', (e) => {
     const open = e.target.closest('[data-open]');
     if (open) { openDoc(open.dataset.open); return; }
+    const play = e.target.closest('[data-play]');
+    if (play) {
+      const id = encodeURIComponent(play.dataset.play);
+      play.parentElement.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0" title="YouTube video player" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      return;
+    }
+    const rm = e.target.closest('[data-rmlink]');
+    if (rm) {
+      const list = user.links[curCh] || [];
+      list.splice(+rm.dataset.rmlink, 1);
+      if (!list.length) delete user.links[curCh];
+      saveUser(); renderChapterBody(); return;
+    }
+    const del = e.target.closest('[data-recdel]');
+    if (del) {
+      if (!confirm('Delete this recording from this device?')) return;
+      vdb.del(+del.dataset.recdel).then(() => renderRecList(curCh)).catch(() => toast('Could not delete the recording'));
+      return;
+    }
     const f = e.target.closest('[data-copy]');
     if (f) {
       const item = FORMULAS[+f.dataset.copy];
@@ -406,19 +389,15 @@
     const cb = e.target.closest('[data-done]');
     if (cb) toggleDone(cb.dataset.done, cb.checked);
   });
-
-  $('#q').addEventListener('input', (e) => { state.q = e.target.value.trim().toLowerCase(); renderChapters(); });
-  $('#chips').addEventListener('click', (e) => {
-    const b = e.target.closest('.chip'); if (!b) return;
-    $$('.chip').forEach((c) => c.classList.toggle('is-on', c === b));
-    state.f = b.dataset.f; renderChapters();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === '/' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) && !viewer.open) {
-      e.preventDefault();
-      if (currentView !== 'chapters') { location.hash = '#chapters'; route(); }
-      $('#q').focus();
-    }
+  document.addEventListener('submit', (e) => {
+    const f = e.target.closest('#linkForm'); if (!f) return;
+    e.preventDefault();
+    let u;
+    try { u = new URL(f.elements.url.value.trim()); } catch { toast('Enter a valid link'); return; }
+    if (!/^https?:$/.test(u.protocol)) { toast('Only http and https links are allowed'); return; }
+    if (!user.links[curCh]) user.links[curCh] = [];
+    user.links[curCh].push({ url: u.href, title: f.elements.title.value.trim(), id: ytId(u.href) || '' });
+    saveUser(); renderChapterBody(); toast('Link added');
   });
 
   /* ================= Focus timer ================= */
@@ -483,36 +462,365 @@
     currentView = name;
   }
 
+  /* ================= Chapter workspace ================= */
+  const CONTENT = window.VINDHI_CONTENT || {};
+  const TABS = [['docs', 'Documents'], ['slide', 'Key slide'], ['videos', 'Videos']];
+  const USER_KEY = 'vindhi-user-v1';
+  const loadUser = () => {
+    try {
+      const u = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+      return { slides: u.slides || {}, notes: u.notes || {}, links: u.links || {}, tab: TABS.some((t) => t[0] === u.tab) ? u.tab : 'docs' };
+    } catch { return { slides: {}, notes: {}, links: {}, tab: 'docs' }; }
+  };
+  const user = loadUser();
+  const saveUser = () => { try { localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch { /* storage blocked */ } };
+  let curCh = 1;
+  let curTab = user.tab;
+
+  const ytId = (raw) => {
+    try {
+      const u = new URL(raw);
+      const h = u.hostname.replace(/^(www|m)\./, '');
+      let id = null;
+      if (h === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+      else if (h === 'youtube.com' || h === 'youtube-nocookie.com') {
+        id = u.searchParams.get('v');
+        if (!id) { const m = /^\/(embed|shorts|live)\/([\w-]{11})/.exec(u.pathname); id = m && m[2]; }
+      }
+      return id && /^[\w-]{11}$/.test(id) ? id : null;
+    } catch { return null; }
+  };
+
+  const playSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>';
+  const linkSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
+
+  function vidCard(v, ownIdx = -1) {
+    const id = esc(v.id);
+    return `
+      <article class="vid">
+        <div class="vid-frame">
+          <button class="vid-thumb" type="button" data-play="${id}" aria-label="Play: ${esc(v.title)}">
+            <img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt="" loading="lazy">
+            <span class="play">${playSvg}</span>
+          </button>
+        </div>
+        <div class="vid-body">
+          <h4>${esc(v.title)}</h4>
+          <p class="vid-meta">${esc(v.channel || 'YouTube')}${ownIdx >= 0 ? ' · added by you' : ''}</p>
+          ${v.note ? `<p class="vid-note">${esc(v.note)}</p>` : ''}
+          <div class="vid-actions">
+            <a class="btn sm ghost" href="https://www.youtube.com/watch?v=${id}" target="_blank" rel="noopener">Open on YouTube</a>
+            ${ownIdx >= 0 ? `<button class="btn sm ghost" type="button" data-rmlink="${ownIdx}">Remove</button>` : ''}
+          </div>
+        </div>
+      </article>`;
+  }
+
+  function linkCard(l, i) {
+    let host = l.url;
+    try { host = new URL(l.url).hostname.replace(/^www\./, ''); } catch { /* keep raw */ }
+    return `
+      <article class="linkcard">
+        <span class="link-ico">${linkSvg}</span>
+        <div><h4>${esc(l.title || host)}</h4><p class="vid-meta">${esc(host)} · added by you</p></div>
+        <a class="btn sm" href="${esc(l.url)}" target="_blank" rel="noopener">Open</a>
+        <button class="btn sm ghost" type="button" data-rmlink="${i}">Remove</button>
+      </article>`;
+  }
+
+  function docsPanel(c) {
+    const rs = RESOURCES.filter((r) => r.ch === c.n);
+    const vids = (CONTENT[c.n] && CONTENT[c.n].videos) || [];
+    return `
+      <ul class="res-list">${rs.map((r) => resRow(r)).join('')}</ul>
+      ${vids.length ? `
+      <section class="related">
+        <div class="related-head"><h4>Related videos</h4><a class="btn sm ghost" href="#ch-${c.n}/videos">Open Videos tab</a></div>
+        <ul>${vids.map((v) => `<li><a href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">${esc(v.title)}</a><span>${esc(v.channel)}</span></li>`).join('')}</ul>
+      </section>` : ''}`;
+  }
+
+  function videosPanel(c) {
+    const curated = (CONTENT[c.n] && CONTENT[c.n].videos) || [];
+    const mine = user.links[c.n] || [];
+    return `
+      <div class="video-grid">${curated.length ? curated.map((v) => vidCard(v)).join('') : '<p class="hint">No videos added for this chapter yet.</p>'}</div>
+      <section class="box add-link">
+        <h4>Add your own link</h4>
+        <p class="muted">Paste a YouTube video or any useful page. It is saved on this device.</p>
+        <form class="link-form" id="linkForm">
+          <input name="url" type="url" required placeholder="https://www.youtube.com/watch?v=…" aria-label="Link address">
+          <input name="title" type="text" maxlength="120" placeholder="Title (optional)" aria-label="Title">
+          <button class="btn" type="submit">Add link</button>
+        </form>
+      </section>
+      ${mine.length ? `<h4 class="sub-h">Your links</h4><div class="video-grid">${mine.map((l, i) => (l.id ? vidCard({ id: l.id, title: l.title || 'YouTube video', channel: 'YouTube', note: '' }, i) : linkCard(l, i))).join('')}</div>` : ''}`;
+  }
+
+  /* ---- Key slide ---- */
+  const slideBase = (c) => (CONTENT[c.n] && CONTENT[c.n].slide) || { title: c.title, sub: c.blurb, ideas: [], formulas: [], traps: [], example: '' };
+  const slideData = (c) => { const b = slideBase(c), u = user.slides[c.n]; return u ? { ...b, ...u } : b; };
+  const liList = (arr) => arr.map((t) => `<li>${esc(t)}</li>`).join('');
+
+  function slidePanel(c) {
+    const d = slideData(c);
+    const edited = !!user.slides[c.n];
+    const provided = (CONTENT[c.n] && CONTENT[c.n].voice) || [];
+    return `
+      <div class="slide-bar">
+        <div><h4>Key slide${edited ? '<span class="badge-soft">Edited by you</span>' : ''}</h4><p class="muted">The important points to run through before the exam. Select Edit to change anything.</p></div>
+        <div class="slide-actions">
+          <button class="btn sm ghost" id="slideEdit" type="button">Edit</button>
+          <button class="btn sm ghost" id="slideReset" type="button"${edited ? '' : ' hidden'}>Reset</button>
+          <button class="btn sm" id="slidePresent" type="button">Present</button>
+        </div>
+      </div>
+      <div class="slide" id="slide">
+        <span class="slide-kicker">Chapter ${c.n} · SC2203</span>
+        <h4 class="slide-title">${esc(d.title)}</h4>
+        <p class="slide-sub">${esc(d.sub)}</p>
+        <div class="slide-cols">
+          <section><h5>Key ideas</h5><ul data-sec="ideas">${liList(d.ideas)}</ul></section>
+          <section><h5>Formulas</h5><ul data-sec="formulas" class="mono">${liList(d.formulas)}</ul></section>
+          <section><h5>Exam watch-outs</h5><ul data-sec="traps">${liList(d.traps)}</ul></section>
+        </div>
+        <div class="slide-example"><h5>Worked example</h5><p data-sec="example">${esc(d.example)}</p></div>
+      </div>
+      <div class="panel-grid">
+        <section class="box" id="voiceBox">
+          <h4>Voice explanation</h4>
+          <p class="muted">Listen to a spoken walkthrough of this chapter.</p>
+          ${provided.length
+            ? provided.map((v) => `<figure class="voice"><figcaption>${esc(v.title || 'Voice note')}</figcaption><audio controls preload="none" src="${esc(encodeURI(v.file))}"></audio></figure>`).join('')
+            : '<p class="hint">No voice note has been added for this chapter yet.</p>'}
+          <h5>My recordings</h5>
+          <div class="rec-actions">
+            <button class="btn sm" id="recBtn" type="button">Record</button>
+            <label class="btn sm ghost">Upload audio<input id="recFile" type="file" accept="audio/*"></label>
+            <span class="rec-status" id="recStatus" role="status"></span>
+          </div>
+          <ul class="rec-list" id="recList"></ul>
+          <p class="hint">Recordings are saved on this device only. Use Download to keep a copy.</p>
+        </section>
+        <section class="box">
+          <h4>My notes</h4>
+          <p class="muted">Add your own points, mnemonics or questions. Saved as you type.</p>
+          <textarea class="notes-box" id="notesBox" placeholder="Write here…" aria-label="My notes for chapter ${c.n}">${esc(user.notes[c.n] || '')}</textarea>
+          <p class="saved" id="notesSaved" role="status"></p>
+        </section>
+      </div>`;
+  }
+
+  function bindSlide(c) {
+    const slide = $('#slide'); if (!slide) return;
+    const editBtn = $('#slideEdit');
+    let editing = false;
+    const lines = (el) => el.innerText.split('\n').map((t) => t.trim()).filter(Boolean);
+    function setEditing(on) {
+      editing = on;
+      slide.classList.toggle('is-editing', on);
+      editBtn.textContent = on ? 'Save' : 'Edit';
+      editBtn.classList.toggle('ghost', !on);
+      $$('[data-sec]', slide).forEach((el) => {
+        if (on) { el.setAttribute('contenteditable', 'true'); el.setAttribute('spellcheck', 'true'); } else el.removeAttribute('contenteditable');
+      });
+      if (on) {
+        $$('ul[data-sec]', slide).forEach((ul) => { if (!ul.children.length) ul.innerHTML = '<li></li>'; });
+        $('[data-sec="ideas"]', slide).focus();
+      }
+    }
+    editBtn.addEventListener('click', () => {
+      if (!editing) { setEditing(true); return; }
+      user.slides[c.n] = {
+        ideas: lines($('[data-sec="ideas"]', slide)),
+        formulas: lines($('[data-sec="formulas"]', slide)),
+        traps: lines($('[data-sec="traps"]', slide)),
+        example: $('[data-sec="example"]', slide).innerText.trim(),
+      };
+      saveUser(); toast('Slide saved on this device'); renderChapterBody();
+    });
+    $('#slideReset').addEventListener('click', () => {
+      if (!confirm('Reset this slide to the original version? Your edits will be lost.')) return;
+      delete user.slides[c.n]; saveUser(); renderChapterBody();
+    });
+    $('#slidePresent').addEventListener('click', () => {
+      const req = slide.requestFullscreen || slide.webkitRequestFullscreen;
+      if (req) req.call(slide); else toast('Fullscreen is not supported in this browser');
+    });
+    slide.addEventListener('paste', (e) => { // keep pasted text plain
+      if (!editing) return;
+      e.preventDefault();
+      document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain'));
+    });
+  }
+
+  function bindNotes(c) {
+    const box = $('#notesBox'); if (!box) return;
+    let t;
+    box.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        if (box.value.trim()) user.notes[c.n] = box.value; else delete user.notes[c.n];
+        saveUser(); $('#notesSaved').textContent = 'Saved';
+        setTimeout(() => { const el = $('#notesSaved'); if (el) el.textContent = ''; }, 1500);
+      }, 400);
+    });
+  }
+
+  /* ---- Voice recordings (stored in IndexedDB on this device) ---- */
+  const vdb = (() => {
+    let db;
+    const open = () => (db ? Promise.resolve(db) : new Promise((res, rej) => {
+      if (!('indexedDB' in window)) { rej(new Error('IndexedDB unavailable')); return; }
+      const r = indexedDB.open('vindhi-voice', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('notes', { keyPath: 'id', autoIncrement: true });
+      r.onsuccess = () => { db = r.result; res(db); };
+      r.onerror = () => rej(r.error);
+    }));
+    const run = async (mode, fn) => {
+      const d = await open();
+      return new Promise((res, rej) => {
+        const t = d.transaction('notes', mode);
+        const req = fn(t.objectStore('notes'));
+        t.oncomplete = () => res(req.result);
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    };
+    return {
+      all: async (ch) => (await run('readonly', (s) => s.getAll())).filter((r) => r.ch === ch).sort((a, b) => a.created - b.created),
+      add: (rec) => run('readwrite', (s) => s.add(rec)),
+      del: (id) => run('readwrite', (s) => s.delete(id)),
+    };
+  })();
+
+  let recUrls = [];
+  let recorder = null;
+  let recTimer = null;
+  const extFor = (type) => (/mp4|m4a|aac/.test(type) ? 'm4a' : /ogg/.test(type) ? 'ogg' : /mpeg|mp3/.test(type) ? 'mp3' : /wav/.test(type) ? 'wav' : 'webm');
+  const stamp = (t) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+  async function renderRecList(n) {
+    const ul = $('#recList'); if (!ul) return;
+    recUrls.forEach((u) => URL.revokeObjectURL(u)); recUrls = [];
+    let items = [];
+    try { items = await vdb.all(n); } catch { const st = $('#recStatus'); if (st) st.textContent = 'Saving recordings is not available in this browser.'; }
+    if (n !== curCh || !$('#recList')) return; // user moved on while loading
+    ul.innerHTML = '';
+    items.forEach((r) => {
+      const url = URL.createObjectURL(r.blob); recUrls.push(url);
+      const li = document.createElement('li'); li.className = 'rec-item';
+      const name = r.name || `Recording, ${stamp(r.created)}`;
+      li.innerHTML = `<div class="rec-top"><span>${esc(name)}</span><div><a class="btn sm ghost" download="vindhi-ch${n}-${r.id}.${extFor(r.type || '')}" href="${url}">Download</a><button class="btn sm ghost" type="button" data-recdel="${r.id}">Delete</button></div></div><audio controls preload="metadata" src="${url}"></audio>`;
+      ul.appendChild(li);
+    });
+  }
+
+  function stopRec() { if (recorder && recorder.state !== 'inactive') recorder.stop(); }
+
+  async function toggleRec(n) {
+    const btn = $('#recBtn'), st = $('#recStatus');
+    if (recorder && recorder.state !== 'inactive') { stopRec(); return; }
+    if (!navigator.mediaDevices || !window.MediaRecorder) { st.textContent = 'Recording is not supported in this browser. Try Upload audio.'; return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { st.textContent = 'Microphone access was blocked.'; return; }
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+    const chunks = [];
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    recorder = rec;
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      clearInterval(recTimer); recorder = null;
+      stream.getTracks().forEach((t) => t.stop());
+      const b = $('#recBtn'); if (b) { b.textContent = 'Record'; b.classList.remove('is-rec'); }
+      const s2 = $('#recStatus'); if (s2) s2.textContent = '';
+      if (!chunks.length) return;
+      try { await vdb.add({ ch: n, blob: new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }), type: rec.mimeType || mime, created: Date.now() }); toast('Recording saved'); } catch { toast('Could not save the recording'); }
+      renderRecList(n);
+    };
+    rec.start();
+    btn.textContent = 'Stop'; btn.classList.add('is-rec');
+    const t0 = Date.now();
+    st.textContent = 'Recording 0:00';
+    recTimer = setInterval(() => { const sec = Math.floor((Date.now() - t0) / 1000); const el = $('#recStatus'); if (el) el.textContent = `Recording ${Math.floor(sec / 60)}:${pad(sec % 60)}`; }, 500);
+  }
+
+  function bindVoice(c) {
+    const btn = $('#recBtn'); if (!btn) return;
+    if (!navigator.mediaDevices || !window.MediaRecorder) { btn.disabled = true; btn.title = 'Recording is not supported in this browser'; }
+    btn.addEventListener('click', () => toggleRec(c.n));
+    $('#recFile').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      if (f.size > 40 * 1024 * 1024) { toast('That file is too large (limit 40 MB)'); return; }
+      try { await vdb.add({ ch: c.n, blob: f, type: f.type, name: f.name, created: Date.now() }); toast('Audio added'); } catch { toast('Could not save the audio'); }
+      renderRecList(c.n);
+    });
+    renderRecList(c.n);
+  }
+
+  /* ---- Render ---- */
+  function renderChapterBody() {
+    const c = CHAPTERS[curCh - 1];
+    const all = RESOURCES.filter((r) => r.ch === c.n);
+    const d = all.filter((r) => done.has(r.id)).length;
+    const nVid = ((CONTENT[c.n] && CONTENT[c.n].videos) || []).length + (user.links[c.n] || []).length;
+    const counts = { docs: all.length, slide: '', videos: nVid };
+    const panel = curTab === 'slide' ? slidePanel(c) : curTab === 'videos' ? videosPanel(c) : docsPanel(c);
+    $('#chapterBody').innerHTML = `
+      <article class="ch-hero" data-sym="${esc(c.sym)}">
+        <div class="ch-top"><span class="ch-badge">Chapter ${c.n}</span><span class="ch-count">${d}/${all.length} done</span></div>
+        <h3 class="ch-title">${esc(c.title)}</h3>
+        <p class="ch-blurb">${esc(c.blurb)}</p>
+        <div class="topics">${c.topics.map((t) => `<span class="topic">${esc(t)}</span>`).join('')}</div>
+        <div class="bar" role="progressbar" aria-label="Chapter ${c.n} progress" aria-valuemin="0" aria-valuemax="${all.length}" aria-valuenow="${d}"><i style="width:${all.length ? (d / all.length) * 100 : 0}%"></i></div>
+      </article>
+      <nav class="tabs" aria-label="Chapter sections">
+        ${TABS.map(([k, label]) => `<a href="#ch-${c.n}/${k}"${curTab === k ? ' aria-current="page"' : ''}>${label}${counts[k] !== '' ? `<span class="tab-n">${counts[k]}</span>` : ''}</a>`).join('')}
+      </nav>
+      <div class="tab-panel" id="tabPanel">${panel}</div>`;
+    if (curTab === 'slide') { bindSlide(c); bindNotes(c); bindVoice(c); }
+  }
+
+  function showChapter(n, tab) {
+    const chapterChanged = n !== curCh;
+    if ((chapterChanged || tab !== curTab) && recorder) stopRec();
+    curCh = n; curTab = tab; user.tab = tab; saveUser();
+    $('#chSelect').value = String(n);
+    $('#chPrev').disabled = n <= 1;
+    $('#chNext').disabled = n >= CHAPTERS.length;
+    renderChapterBody();
+    setActiveChapter(n);
+    return chapterChanged;
+  }
+
+  (function chapterControls() {
+    $('#chSelect').innerHTML = CHAPTERS.map((c) => `<option value="${c.n}">${c.n}. ${esc(c.title)}</option>`).join('');
+    const go = (n) => { location.hash = `#ch-${n}/${curTab}`; };
+    $('#chSelect').addEventListener('change', (e) => go(+e.target.value));
+    $('#chPrev').addEventListener('click', () => go(Math.max(1, curCh - 1)));
+    $('#chNext').addEventListener('click', () => go(Math.min(CHAPTERS.length, curCh + 1)));
+  })();
+
   function route() {
     const h = decodeURIComponent(location.hash.slice(1));
-    const m = /^ch-(\d+)$/.exec(h);
+    const m = /^ch-(\d+)(?:\/(docs|slide|videos))?$/.exec(h);
     const view = m ? 'chapters' : (VIEWS.includes(h) ? h : 'overview');
-    const switching = view !== currentView;
+    const prev = currentView;
     showView(view);
-    if (m) {
-      let el = $('#ch-' + m[1]);
-      if (!el) { // hidden by an active search/filter: clear it first
-        state.q = ''; state.f = 'all'; $('#q').value = '';
-        $$('.chip').forEach((c) => c.classList.toggle('is-on', c.dataset.f === 'all'));
-        renderChapters(); el = $('#ch-' + m[1]);
-      }
-      if (el) el.scrollIntoView({ block: 'start', behavior: switching ? 'auto' : 'smooth' });
+    if (view === 'chapters') {
+      const n = m ? Math.min(Math.max(+m[1], 1), CHAPTERS.length) : curCh;
+      const tab = (m && m[2]) || curTab;
+      const changed = showChapter(n, tab);
+      if (changed && prev === 'chapters') window.scrollTo({ top: 0, behavior: 'instant' });
+    } else {
+      setActiveChapter(null);
     }
     closeDrawer();
-    spy();
   }
 
   function setActiveChapter(n) { if (n !== activeChapter) { activeChapter = n; renderSidebarChapters(); } }
-  function spy() {
-    if (currentView !== 'chapters') { setActiveChapter(null); return; }
-    const els = $$('.chapter'); if (!els.length) { setActiveChapter(null); return; }
-    let cur = els[0];
-    for (const el of els) { if (el.getBoundingClientRect().top <= 150) cur = el; else break; }
-    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) cur = els[els.length - 1];
-    setActiveChapter(+cur.id.slice(3));
-  }
-  let spyTick = false;
-  addEventListener('scroll', () => { if (spyTick) return; spyTick = true; requestAnimationFrame(() => { spyTick = false; spy(); }); }, { passive: true });
+
   addEventListener('hashchange', route);
   // re-clicking the link for the current hash does not fire hashchange, so route manually
   document.addEventListener('click', (e) => {
@@ -530,7 +838,6 @@
 
   /* ================= Init ================= */
   renderPlan();
-  renderChapters();
   renderPapers();
   renderFormulas();
   updateProgress();

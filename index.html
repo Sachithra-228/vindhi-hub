@@ -167,27 +167,26 @@
     <section class="view section alt" id="chapters" data-view="chapters">
       <div class="wrap">
         <header class="sec-head">
-          <p class="eyebrow">Lecture notes &amp; tutorials</p>
+          <p class="eyebrow">Study workspace</p>
           <h2>Chapters</h2>
-          <p class="sec-sub">Seven chapters, each with its notes and matching tutorial. Read a PDF here or download it.</p>
+          <p class="sec-sub">Pick a chapter, then switch between its documents, key slide and videos.</p>
         </header>
 
-        <div class="toolbar">
-          <label class="search">
-            <span class="sr-only">Search materials</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
-            <input id="q" type="search" placeholder="Search: normal, CI, regression, tutorial 4" autocomplete="off">
-            <kbd aria-hidden="true">/</kbd>
+        <div class="chapter-bar">
+          <button class="icon-btn" id="chPrev" type="button" aria-label="Previous chapter">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+          </button>
+          <label class="select-wrap">
+            <span class="sr-only">Chapter</span>
+            <select id="chSelect"></select>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </label>
-          <div class="chips" id="chips" role="group" aria-label="Filter by type">
-            <button class="chip is-on" type="button" data-f="all">All</button>
-            <button class="chip" type="button" data-f="notes">Notes</button>
-            <button class="chip" type="button" data-f="tutorial">Tutorials</button>
-          </div>
+          <button class="icon-btn" id="chNext" type="button" aria-label="Next chapter">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+          </button>
         </div>
 
-        <ol class="journey" id="journey"></ol>
-        <p class="empty" id="empty" hidden>Nothing matches that search. Try a different word.</p>
+        <div id="chapterBody"></div>
       </div>
     </section>
 
@@ -257,6 +256,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="assets/js/content.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>
