@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vindhi</title>
+  <meta name="description" content="SC2203 Biostatistics study materials: lecture notes, tutorials and past papers in one place, with an exam countdown, study plan and progress tracker.">
+  <meta name="theme-color" content="#131B2B">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23131B2B'/%3E%3Cpath d='M8 46C19 46 21 16 32 16s13 30 24 30' fill='none' stroke='%23CFEAE0' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <a class="skip" href="#chapters">Skip to materials</a>
+
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Vindhi, back to top">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><path d="M6 46C18 46 20 14 32 14s14 32 26 32" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/></svg>
+      </span>
+      <span>Vindhi</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#plan">Plan</a>
+      <a href="#chapters">Chapters</a>
+      <a href="#papers">Past papers</a>
+      <a href="#formulas">Formulas</a>
+    </nav>
+    <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+      <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg>
+      <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.6 8.6 0 0 1 9.8 3.5a8.6 8.6 0 1 0 10.7 10.7z"/></svg>
+    </button>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="symbols" id="symbols" aria-hidden="true"></div>
+      <div class="wrap hero-inner">
+        <p class="eyebrow">SC2203 · Biostatistics</p>
+        <h1>Vindhi</h1>
+        <p class="lede">Lecture notes, tutorials and past papers in one place. Track your revision as you go. Your progress is saved on this device.</p>
+
+        <div class="hero-grid">
+          <div class="card countdown" id="countdown" role="timer" aria-live="off">
+            <p class="card-label">Exam countdown</p>
+            <div class="cd-row" id="cdRow">
+              <div class="cd"><b id="cdD">--</b><span>days</span></div>
+              <div class="cd"><b id="cdH">--</b><span>hours</span></div>
+              <div class="cd"><b id="cdM">--</b><span>mins</span></div>
+              <div class="cd"><b id="cdS">--</b><span>secs</span></div>
+            </div>
+            <p class="cd-note" id="cdNote">Saturday 21 November 2026</p>
+          </div>
+
+          <div class="card ring-card">
+            <div class="ring" aria-hidden="true">
+              <svg viewBox="0 0 120 120">
+                <circle class="ring-bg" cx="60" cy="60" r="52"/>
+                <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="52"/>
+              </svg>
+              <div class="ring-text"><b id="ringPct">0%</b></div>
+            </div>
+            <div>
+              <p class="card-label">Revision progress</p>
+              <p class="ring-sub"><b id="doneCount">0</b> of <b id="totalCount">0</b> materials done</p>
+              <p class="ring-hint" id="ringHint">Tick items below as you finish them.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card curve">
+          <div class="curve-head">
+            <p class="card-label">Standard normal distribution</p>
+            <p class="curve-read" id="curveRead" aria-live="polite">Move across the curve to read z-scores.</p>
+          </div>
+          <svg id="bell" viewBox="0 0 800 250" role="img" aria-label="Standard normal curve. Move across it to read the z-score and cumulative probability.">
+            <defs>
+              <linearGradient id="gArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="var(--accent)" stop-opacity=".5"/>
+                <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="gLine" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="var(--accent)"/>
+                <stop offset=".5" stop-color="var(--accent-2)"/>
+                <stop offset="1" stop-color="var(--accent)"/>
+              </linearGradient>
+            </defs>
+            <g id="bellAxis"></g>
+            <path id="bellArea" fill="url(#gArea)"/>
+            <path id="bellTail" fill="var(--accent-2)" fill-opacity=".38"/>
+            <path id="bellLine" fill="none" stroke="url(#gLine)" stroke-width="3.5" stroke-linecap="round" pathLength="1"/>
+            <g id="bellHover" opacity="0">
+              <line id="hvLine" y1="20" y2="214" stroke="var(--muted)" stroke-dasharray="4 5"/>
+              <circle id="hvDot" r="7" fill="var(--navy)" stroke="var(--accent-2)" stroke-width="3.5"/>
+            </g>
+            <text id="tailLabel" text-anchor="middle" class="tail-label">top 5% tail</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- PLAN -->
+    <section class="section" id="plan">
+      <div class="wrap">
+        <header class="sec-head">
+          <p class="eyebrow">Revision plan</p>
+          <h2>Four days to the exam</h2>
+          <p class="sec-sub">A suggested route through the material. Adjust it to suit you. Select a chapter to jump straight to it.</p>
+        </header>
+        <div class="plan-grid" id="planGrid"></div>
+      </div>
+    </section>
+
+    <!-- CHAPTERS -->
+    <section class="section alt" id="chapters">
+      <div class="wrap">
+        <header class="sec-head">
+          <p class="eyebrow">Lecture notes &amp; tutorials</p>
+          <h2>Chapters</h2>
+          <p class="sec-sub">Seven chapters, each with its notes and matching tutorial. Read a PDF here or download it.</p>
+        </header>
+
+        <div class="toolbar">
+          <label class="search">
+            <span class="sr-only">Search materials</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+            <input id="q" type="search" placeholder="Search: normal, CI, regression, tutorial 4" autocomplete="off">
+            <kbd aria-hidden="true">/</kbd>
+          </label>
+          <div class="chips" id="chips" role="group" aria-label="Filter by type">
+            <button class="chip is-on" type="button" data-f="all">All</button>
+            <button class="chip" type="button" data-f="notes">Notes</button>
+            <button class="chip" type="button" data-f="tutorial">Tutorials</button>
+          </div>
+        </div>
+
+        <ol class="journey" id="journey"></ol>
+        <p class="empty" id="empty" hidden>Nothing matches that search. Try a different word.</p>
+      </div>
+    </section>
+
+    <!-- PAST PAPERS -->
+    <section class="section" id="papers">
+      <div class="wrap">
+        <header class="sec-head">
+          <p class="eyebrow">Practice</p>
+          <h2>Past papers</h2>
+          <p class="sec-sub">Attempt one under timed conditions, then check your answers against the solutions where available.</p>
+        </header>
+        <div class="paper-grid" id="paperGrid"></div>
+      </div>
+    </section>
+
+    <!-- FORMULAS -->
+    <section class="section alt" id="formulas">
+      <div class="wrap">
+        <header class="sec-head">
+          <p class="eyebrow">Quick reference</p>
+          <h2>Formula sheet</h2>
+          <p class="sec-sub">Standard forms for a last skim. Always match the notation to your lecture notes. Select a card to copy it.</p>
+        </header>
+        <div class="formula-grid" id="formulaGrid"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p>Vindhi · SC2203 Biostatistics</p>
+      <p class="muted">Notes, tutorials and past papers for exam revision.</p>
+    </div>
+  </footer>
+
+  <!-- PDF viewer -->
+  <dialog id="viewer" aria-labelledby="viewerTitle">
+    <div class="viewer-bar">
+      <h3 id="viewerTitle">Document</h3>
+      <div class="viewer-actions">
+        <a class="btn ghost" id="viewerOpen" href="#" target="_blank" rel="noopener">Open in tab</a>
+        <a class="btn ghost" id="viewerDl" href="#" download>Download</a>
+        <button class="btn" id="viewerClose" type="button">Close</button>
+      </div>
+    </div>
+    <iframe id="viewerFrame" title="PDF viewer" loading="lazy"></iframe>
+  </dialog>
+
+  <!-- Focus timer -->
+  <div class="timer" id="timer">
+    <div class="timer-panel" id="timerPanel" hidden>
+      <p class="card-label" id="timerMode">Focus</p>
+      <p class="timer-time" id="timerTime">25:00</p>
+      <div class="timer-actions">
+        <button class="btn" id="tStart" type="button">Start</button>
+        <button class="btn ghost" id="tReset" type="button">Reset</button>
+        <button class="btn ghost" id="tSwitch" type="button">Break</button>
+      </div>
+    </div>
+    <button class="timer-fab" id="timerFab" type="button" aria-expanded="false" aria-controls="timerPanel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.6 1.6M9.5 2.8h5"/></svg>
+      <span id="timerFabTime">25:00</span>
+    </button>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
