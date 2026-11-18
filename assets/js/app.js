@@ -14,25 +14,25 @@
 
   /* ================= Content ================= */
   const CHAPTERS = [
-    { n: 1, sym: 'n', title: 'Intro to Biostatistics & Random Sampling',
+    { n: 1, short: 'Intro & Sampling', sym: 'n', title: 'Intro to Biostatistics & Random Sampling',
       blurb: 'What biostatistics is for, the language of populations and samples, and how random samples are drawn.',
       topics: ['Population vs sample', 'Data types', 'Random sampling'] },
-    { n: 2, sym: 'x̄', title: 'Descriptive Statistics',
+    { n: 2, short: 'Descriptive Stats', sym: 'x̄', title: 'Descriptive Statistics',
       blurb: 'Summarising data with tables, charts, centre and spread.',
       topics: ['Frequency tables', 'Mean · median · mode', 'Spread', 'Charts'] },
-    { n: 3, sym: 'P', title: 'Introduction to Probability',
+    { n: 3, short: 'Probability', sym: 'P', title: 'Introduction to Probability',
       blurb: 'Events, probability rules and conditional probability.',
       topics: ['Events', 'Probability rules', 'Conditional probability'] },
-    { n: 4, sym: 'σ', title: 'Random Variables & Probability Distributions',
+    { n: 4, short: 'Random Variables', sym: 'σ', title: 'Random Variables & Probability Distributions',
       blurb: 'Discrete and continuous random variables, ending with the star of the show: the normal distribution.',
       topics: ['Discrete', 'Continuous', 'Normal distribution'] },
-    { n: 5, sym: 'μ', title: 'Sampling Distributions & Confidence Intervals',
+    { n: 5, short: 'Sampling & CIs', sym: 'μ', title: 'Sampling Distributions & Confidence Intervals',
       blurb: 'Parameter vs statistic, sampling distributions, the Central Limit Theorem and confidence intervals.',
       topics: ['Parameter vs statistic', 'Central Limit Theorem', 'Confidence intervals'] },
-    { n: 6, sym: 'α', title: 'Hypothesis Testing',
+    { n: 6, short: 'Hypothesis Testing', sym: 'α', title: 'Hypothesis Testing',
       blurb: 'Framing H₀ and H₁, choosing α, reading p-values and concluding in biological context.',
       topics: ['H₀ vs H₁', 'p-values', 'Significance level α'] },
-    { n: 7, sym: 'r', title: 'Common Statistical Tests',
+    { n: 7, short: 'Common Tests', sym: 'r', title: 'Common Statistical Tests',
       blurb: 'Preparing a dataset for analysis and an introduction to regression.',
       topics: ['Data preparation', 'Linear regression'] },
   ];
@@ -111,12 +111,12 @@
   (function theme() {
     const root = document.documentElement;
     try { const t = localStorage.getItem(CONFIG.themeKey); if (t) root.dataset.theme = t; } catch { /* ignore */ }
-    $('#themeBtn').addEventListener('click', () => {
+    $$('[data-theme-toggle]').forEach((btn) => btn.addEventListener('click', () => {
       const isDark = root.dataset.theme === 'dark' || (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
       const next = isDark ? 'light' : 'dark';
       root.dataset.theme = next;
       try { localStorage.setItem(CONFIG.themeKey, next); } catch { /* ignore */ }
-    });
+    }));
   })();
 
   /* ================= Floating symbols ================= */
@@ -146,6 +146,7 @@
       if (ms <= 0) {
         card.classList.add('is-done');
         $('#cdNote').textContent = 'Exam day. Good luck.';
+        set('#sbDays', 'Today');
         return false;
       }
       const s = Math.floor(ms / 1000);
@@ -153,6 +154,7 @@
       set('#cdH', pad(Math.floor((s % 86400) / 3600)));
       set('#cdM', pad(Math.floor((s % 3600) / 60)));
       set('#cdS', pad(s % 60));
+      set('#sbDays', `${Math.floor(s / 86400)}d ${pad(Math.floor((s % 86400) / 3600))}h`);
       return true;
     }
     if (tick()) { const id = setInterval(() => { if (!tick()) clearInterval(id); }, 1000); }
@@ -222,9 +224,12 @@
     $('#doneCount').textContent = n;
     $('#totalCount').textContent = total;
     $('#ringHint').textContent =
-      n === 0 ? 'Tick items below as you finish them.' :
+      n === 0 ? 'Tick items in Chapters as you finish them.' :
       n === total ? 'All materials completed.' :
       pct >= 60 ? 'Over halfway. Keep going.' : 'Good start. One at a time.';
+    $('#sbCount').textContent = `${n}/${total}`;
+    $('#sbBar').style.width = pct + '%';
+    renderSidebarChapters();
   }
 
   function toggleDone(id, on) {
@@ -410,7 +415,9 @@
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === '/' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) && !viewer.open) {
-      e.preventDefault(); $('#q').focus();
+      e.preventDefault();
+      if (currentView !== 'chapters') { location.hash = '#chapters'; route(); }
+      $('#q').focus();
     }
   });
 
@@ -450,10 +457,82 @@
     show();
   })();
 
+  /* ================= Sidebar, views & routing ================= */
+  const VIEWS = ['overview', 'plan', 'chapters', 'papers', 'formulas'];
+  const TITLES = { overview: 'Overview', plan: 'Study plan', chapters: 'Chapters', papers: 'Past papers', formulas: 'Formula sheet' };
+  let currentView = null;
+  let activeChapter = null;
+
+  const checkSvg = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function renderSidebarChapters() {
+    const comp = chapterComplete();
+    $('#sbChapters').innerHTML = CHAPTERS.map((c) => {
+      const cls = [comp.has(c.n) ? 'is-complete' : '', activeChapter === c.n ? 'is-active' : ''].join(' ').trim();
+      return `<li><a href="#ch-${c.n}" class="${cls}" title="${esc(c.title)}"${activeChapter === c.n ? ' aria-current="location"' : ''}><span class="n">${comp.has(c.n) ? checkSvg : c.n}</span><span class="t">${esc(c.short)}</span></a></li>`;
+    }).join('');
+  }
+
+  function showView(name) {
+    VIEWS.forEach((v) => { $('#' + v).hidden = v !== name; });
+    $$('[data-nav]').forEach((a) => {
+      if (a.dataset.nav === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    $('#topbarTitle').textContent = TITLES[name];
+    document.title = name === 'overview' ? 'Vindhi' : `${TITLES[name]} · Vindhi`;
+    if (name !== currentView) window.scrollTo({ top: 0, behavior: 'instant' });
+    currentView = name;
+  }
+
+  function route() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    const m = /^ch-(\d+)$/.exec(h);
+    const view = m ? 'chapters' : (VIEWS.includes(h) ? h : 'overview');
+    const switching = view !== currentView;
+    showView(view);
+    if (m) {
+      let el = $('#ch-' + m[1]);
+      if (!el) { // hidden by an active search/filter: clear it first
+        state.q = ''; state.f = 'all'; $('#q').value = '';
+        $$('.chip').forEach((c) => c.classList.toggle('is-on', c.dataset.f === 'all'));
+        renderChapters(); el = $('#ch-' + m[1]);
+      }
+      if (el) el.scrollIntoView({ block: 'start', behavior: switching ? 'auto' : 'smooth' });
+    }
+    closeDrawer();
+    spy();
+  }
+
+  function setActiveChapter(n) { if (n !== activeChapter) { activeChapter = n; renderSidebarChapters(); } }
+  function spy() {
+    if (currentView !== 'chapters') { setActiveChapter(null); return; }
+    const els = $$('.chapter'); if (!els.length) { setActiveChapter(null); return; }
+    let cur = els[0];
+    for (const el of els) { if (el.getBoundingClientRect().top <= 150) cur = el; else break; }
+    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) cur = els[els.length - 1];
+    setActiveChapter(+cur.id.slice(3));
+  }
+  let spyTick = false;
+  addEventListener('scroll', () => { if (spyTick) return; spyTick = true; requestAnimationFrame(() => { spyTick = false; spy(); }); }, { passive: true });
+  addEventListener('hashchange', route);
+  // re-clicking the link for the current hash does not fire hashchange, so route manually
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (a && a.getAttribute('href') === location.hash) { e.preventDefault(); route(); }
+  });
+
+  const sidebar = $('#sidebar'), backdrop = $('#sbBackdrop'), openBtn = $('#sbOpen');
+  function openDrawer() { sidebar.classList.add('is-open'); backdrop.hidden = false; openBtn.setAttribute('aria-expanded', 'true'); document.body.style.overflow = 'hidden'; $('#sbClose').focus(); }
+  function closeDrawer() { sidebar.classList.remove('is-open'); backdrop.hidden = true; openBtn.setAttribute('aria-expanded', 'false'); document.body.style.overflow = ''; }
+  openBtn.addEventListener('click', openDrawer);
+  $('#sbClose').addEventListener('click', () => { closeDrawer(); openBtn.focus(); });
+  backdrop.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sidebar.classList.contains('is-open')) { closeDrawer(); openBtn.focus(); } });
+
   /* ================= Init ================= */
   renderPlan();
   renderChapters();
   renderPapers();
   renderFormulas();
   updateProgress();
+  route();
 })();
