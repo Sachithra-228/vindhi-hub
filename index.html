@@ -166,26 +166,7 @@
     <!-- CHAPTERS -->
     <section class="view section alt" id="chapters" data-view="chapters">
       <div class="wrap">
-        <header class="sec-head">
-          <p class="eyebrow">Study workspace</p>
-          <h2>Chapters</h2>
-          <p class="sec-sub">Pick a chapter, then switch between its documents, key slide and videos.</p>
-        </header>
-
-        <div class="chapter-bar">
-          <button class="icon-btn" id="chPrev" type="button" aria-label="Previous chapter">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-          </button>
-          <label class="select-wrap">
-            <span class="sr-only">Chapter</span>
-            <select id="chSelect"></select>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-          </label>
-          <button class="icon-btn" id="chNext" type="button" aria-label="Next chapter">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
-          </button>
-        </div>
-
+        <h2 class="sr-only">Chapters</h2>
         <div id="chapterBody"></div>
       </div>
     </section>
@@ -224,6 +205,18 @@
     </div><!-- /.shell -->
   </div><!-- /.app -->
 
+  <!-- Chapter picker (right-side window) -->
+  <div class="pick-backdrop" id="pickBackdrop" hidden></div>
+  <aside class="picker" id="picker" aria-label="Choose a chapter">
+    <div class="pick-head">
+      <h3>Choose a chapter</h3>
+      <button class="icon-btn" id="pickClose" type="button" aria-label="Close chapter list">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <ol class="pick-list" id="pickList"></ol>
+  </aside>
+
   <!-- PDF viewer -->
   <dialog id="viewer" aria-labelledby="viewerTitle">
     <div class="viewer-bar">
@@ -257,6 +250,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="assets/js/content.js"></script>
+  <script src="assets/js/narration.js"></script>
   <script src="assets/js/app.js"></script>
 </body>
 </html>

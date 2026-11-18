@@ -2,12 +2,11 @@
    Edit this file to add videos, change the key slides or attach voice notes.
 
    videos : YouTube videos shown in the Videos tab. `id` is the part after v= in the URL.
-   voice  : audio files that explain the chapter. Put the file in materials/voice-notes/
-            and add { file: 'materials/voice-notes/ch01.m4a', title: 'Chapter 1 walkthrough' }.
+   Audio : the spoken walkthrough of each chapter is listed in VINDHI_AUDIO at the bottom of this file.
+            The words are in narration.js and the mp3 files are in materials/voice-notes/.
    slide  : the "key slide" (ideas, formulas, exam watch-outs, one worked example). */
 window.VINDHI_CONTENT = {
   1: {
-    voice: [],
     videos: [
       { id: 'fSmedyVv-Us', title: 'Sampling Methods 101: Probability & Non-Probability Sampling Explained Simply', channel: 'Grad Coach', note: 'Matches Part 2: population vs sample and probability vs non-probability sampling.' },
       { id: 'TlMhoKbVzTY', title: 'STRATIFIED, SYSTEMATIC, and CLUSTER Random Sampling (12-4)', channel: 'Research By Design', note: 'The structured probability designs from Part 2.' },
@@ -42,7 +41,6 @@ window.VINDHI_CONTENT = {
   },
 
   2: {
-    voice: [],
     videos: [
       { id: 'kn83BA7cRNM', title: 'Mean, Median, and Mode: Measures of Central Tendency: Crash Course Statistics #3', channel: 'CrashCourse', note: 'The central tendency section.' },
       { id: 'R4yfNi_8Kqw', title: 'Measures of Spread: Crash Course Statistics #4', channel: 'CrashCourse', note: 'The dispersion section: range, variance and standard deviation.' },
@@ -81,7 +79,6 @@ window.VINDHI_CONTENT = {
   },
 
   3: {
-    voice: [],
     videos: [
       { id: 'Y8EOkJ75elM', title: 'Basic Probability Rules', channel: 'Michael Porinchak', note: 'The basic properties and rules from the notes.' },
       { id: 'o6vC9CauRPI', title: 'The Addition Rule of Probability (With Examples)', channel: "Zach's Math Zone", note: 'P(A ∪ B) with worked examples.' },
@@ -118,7 +115,6 @@ window.VINDHI_CONTENT = {
   },
 
   4: {
-    voice: [],
     videos: [
       { id: 'C9xB9HrrALA', title: 'Discrete Random Variable & Binomial Probabilities', channel: 'Ellen Smyth', note: 'Part 1: discrete random variables and the binomial.' },
       { id: 'P1X2WuJjG1o', title: 'BINOMIAL Probability Distribution for Discrete Random Variables (9-8)', channel: 'Research By Design', note: 'Binomial conditions, formula and examples.' },
@@ -156,7 +152,6 @@ window.VINDHI_CONTENT = {
   },
 
   5: {
-    voice: [],
     videos: [
       { id: 'YAlJCEDH2uY', title: 'The Central Limit Theorem, Clearly Explained!!!', channel: 'StatQuest with Josh Starmer', note: 'What the CLT says and why it matters.' },
       { id: 'XNgt7F6FqDU', title: 'The standard error, Clearly Explained!!!', channel: 'StatQuest with Josh Starmer', note: 'Standard error of the mean.' },
@@ -192,7 +187,6 @@ window.VINDHI_CONTENT = {
   },
 
   6: {
-    voice: [],
     videos: [
       { id: 'dFa-zmjtswY', title: 'Statistics Part 1: Hypothesis Testing, Null vs Alternative & Standard Deviation', channel: 'QSPplus', note: 'Null vs alternative hypotheses.' },
       { id: 'vemZtEM63GY', title: 'p-values: What they are and how to interpret them', channel: 'StatQuest with Josh Starmer', note: 'Understanding the p-value.' },
@@ -231,7 +225,6 @@ window.VINDHI_CONTENT = {
   },
 
   7: {
-    voice: [],
     videos: [
       { id: '948pLzVwLok', title: "What is a T-Test? Student's T-Test Demystified (One-Sample, Paired & Independent)", channel: 'Practical stats', note: 'The three t-tests from the lecture.' },
       { id: 'Q_pO9NzWxPY', title: 'One sample t-test vs Independent t-test vs Paired t-test', channel: 'numiqo', note: 'Which t-test to choose.' },
@@ -268,4 +261,15 @@ window.VINDHI_CONTENT = {
       example: 'Age vs blood pressure example: r = 0.679, R² = 0.462, so about 46% of the variation in BP is explained by age.',
     },
   },
+};
+
+/* Spoken walkthrough per chapter (the first slide plays it). seconds = length of the mp3. */
+window.VINDHI_AUDIO = {
+  1: { file: 'materials/voice-notes/ch01-explained.mp3', seconds: 227 },
+  2: { file: 'materials/voice-notes/ch02-explained.mp3', seconds: 177 },
+  3: { file: 'materials/voice-notes/ch03-explained.mp3', seconds: 205 },
+  4: { file: 'materials/voice-notes/ch04-explained.mp3', seconds: 208 },
+  5: { file: 'materials/voice-notes/ch05-explained.mp3', seconds: 195 },
+  6: { file: 'materials/voice-notes/ch06-explained.mp3', seconds: 213 },
+  7: { file: 'materials/voice-notes/ch07-explained.mp3', seconds: 198 },
 };
