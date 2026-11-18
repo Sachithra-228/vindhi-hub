@@ -1,18 +1,21 @@
-# Voice notes
+# Voice explanations
 
-Put the audio files that explain each chapter in this folder, for example:
+One spoken walkthrough per chapter (about 3 to 4 minutes each). The first slide of every chapter plays it.
 
 ```
-ch01-intro.m4a
-ch02-descriptive.mp3
+ch01-explained.mp3 … ch07-explained.mp3
 ```
 
-Then add one line to the matching chapter in `assets/js/content.js`:
+The words are in `assets/js/narration.js`, which is also the "Read along" transcript on the site.
 
-```js
-voice: [{ file: 'materials/voice-notes/ch01-intro.m4a', title: 'Chapter 1 walkthrough' }],
+## Regenerate after editing the text
+
+The audio is made with [edge-tts](https://pypi.org/project/edge-tts/) (Microsoft neural voice `en-GB-SoniaNeural`).
+
+```bash
+pip install edge-tts
+node -e "global.window={}; require('./assets/js/narration.js'); require('fs').writeFileSync('narration.json', JSON.stringify(window.VINDHI_NARRATION))"
+python tools/make_audio.py narration.json materials/voice-notes
 ```
 
-You can list more than one file per chapter. mp3, m4a, ogg, wav and webm all play in modern browsers.
-
-Recordings made with the Record button on the site are saved on that device only. Use their Download button to get the file, drop it in this folder and list it as above to share it with everyone.
+Then update the `seconds` values in `window.VINDHI_AUDIO` at the bottom of `assets/js/content.js` if a length changed.

@@ -370,12 +370,7 @@
       if (!list.length) delete user.links[curCh];
       saveUser(); renderChapterBody(); return;
     }
-    const del = e.target.closest('[data-recdel]');
-    if (del) {
-      if (!confirm('Delete this recording from this device?')) return;
-      vdb.del(+del.dataset.recdel).then(() => renderRecList(curCh)).catch(() => toast('Could not delete the recording'));
-      return;
-    }
+    if (e.target.closest('[data-pick]')) { openPicker(); return; }
     const f = e.target.closest('[data-copy]');
     if (f) {
       const item = FORMULAS[+f.dataset.copy];
@@ -530,14 +525,7 @@
 
   function docsPanel(c) {
     const rs = RESOURCES.filter((r) => r.ch === c.n);
-    const vids = (CONTENT[c.n] && CONTENT[c.n].videos) || [];
-    return `
-      <ul class="res-list">${rs.map((r) => resRow(r)).join('')}</ul>
-      ${vids.length ? `
-      <section class="related">
-        <div class="related-head"><h4>Related videos</h4><a class="btn sm ghost" href="#ch-${c.n}/videos">Open Videos tab</a></div>
-        <ul>${vids.map((v) => `<li><a href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener">${esc(v.title)}</a><span>${esc(v.channel)}</span></li>`).join('')}</ul>
-      </section>` : ''}`;
+    return `<ul class="res-list">${rs.map((r) => resRow(r)).join('')}</ul>`;
   }
 
   function videosPanel(c) {
@@ -557,210 +545,267 @@
       ${mine.length ? `<h4 class="sub-h">Your links</h4><div class="video-grid">${mine.map((l, i) => (l.id ? vidCard({ id: l.id, title: l.title || 'YouTube video', channel: 'YouTube', note: '' }, i) : linkCard(l, i))).join('')}</div>` : ''}`;
   }
 
-  /* ---- Key slide ---- */
+  /* ---- Key slides: a paged deck ---- */
+  const AUDIO = window.VINDHI_AUDIO || {};
+  const NARR = window.VINDHI_NARRATION || {};
+  let deckIdx = 0;
+  let deckAudio = null;
+  let deckEditing = false;
+  let deckGo = null;
+
   const slideBase = (c) => (CONTENT[c.n] && CONTENT[c.n].slide) || { title: c.title, sub: c.blurb, ideas: [], formulas: [], traps: [], example: '' };
   const slideData = (c) => { const b = slideBase(c), u = user.slides[c.n]; return u ? { ...b, ...u } : b; };
   const liList = (arr) => arr.map((t) => `<li>${esc(t)}</li>`).join('');
+  const fmtTime = (t) => (Number.isFinite(t) ? `${Math.floor(t / 60)}:${pad(Math.floor(t % 60))}` : '-:--');
+
+  const dkIcons = {
+    head: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H5.5A1.5 1.5 0 0 1 4 18.5zM20 15h-3v5h1.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>',
+    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>',
+    left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
+    right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+  };
+
+  // split a list into pages of at most `max` items, as evenly as possible
+  function balanced(arr, max) {
+    if (!arr.length) return [];
+    const pages = Math.ceil(arr.length / max);
+    const base = Math.floor(arr.length / pages);
+    let extra = arr.length % pages, i = 0;
+    const out = [];
+    for (let k = 0; k < pages; k++) {
+      const size = base + (extra-- > 0 ? 1 : 0);
+      out.push({ start: i, items: arr.slice(i, i + size) });
+      i += size;
+    }
+    return out;
+  }
+
+  function buildPages(d) {
+    const pages = [{ type: 'listen', label: 'Listen' }];
+    const add = (sec, title, max) => {
+      const parts = balanced(d[sec], max);
+      parts.forEach((p, i) => pages.push({ type: sec, title, part: parts.length > 1 ? `${i + 1} of ${parts.length}` : '', label: parts.length > 1 ? `${title} ${i + 1}` : title, ...p }));
+    };
+    add('ideas', 'Key ideas', 3);
+    add('formulas', 'Formulas', 4);
+    add('traps', 'Exam watch-outs', 3);
+    if (d.example) pages.push({ type: 'example', label: 'Worked example' });
+    pages.push({ type: 'finish', label: 'Finish' });
+    return pages;
+  }
+
+  function listenPage(c, d) {
+    const a = AUDIO[c.n];
+    const paras = NARR[c.n] || [];
+    if (!a) return `<header class="pg-head"><span class="pg-kicker">Start here</span><h4 class="pg-title">${esc(d.title)}</h4><p class="pg-sub">${esc(d.sub)}</p></header>`;
+    return `
+      <div class="listen">
+        <button class="listen-btn" id="lsPlay" type="button" aria-label="Play the chapter explanation"><span class="i-play">${dkIcons.play}</span><span class="i-pause">${dkIcons.pause}</span></button>
+        <div class="listen-copy">
+          <span class="pg-kicker">Start here</span>
+          <h4 class="pg-title">Listen to the whole chapter explained</h4>
+          <p class="pg-sub">${esc(d.title)}. A spoken walkthrough of the lecture, about ${Math.round(a.seconds / 60)} minutes. Keep it playing while you flip through the slides.</p>
+          <div class="ls-player">
+            <span id="lsCur">0:00</span>
+            <input id="lsSeek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+            <span id="lsDur">${fmtTime(a.seconds)}</span>
+            <button class="ls-speed" id="lsSpeed" type="button" aria-label="Playback speed">1×</button>
+          </div>
+          ${paras.length ? '<button class="ls-read" id="lsRead" type="button" aria-expanded="false">Read along</button>' : ''}
+          <audio id="lsAudio" preload="metadata" src="${esc(encodeURI(a.file))}"></audio>
+        </div>
+        ${paras.length ? `<div class="ls-transcript" id="lsTranscript" hidden>${paras.map((t) => `<p>${esc(t)}</p>`).join('')}</div>` : ''}
+      </div>`;
+  }
+
+  function pageHtml(p, c, d) {
+    const head = (kicker, title) => `<header class="pg-head"><span class="pg-kicker">${kicker}</span><h4 class="pg-title">${title}</h4></header>`;
+    if (p.type === 'listen') return listenPage(c, d);
+    if (p.type === 'ideas') return `${head(`Key ideas${p.part ? ` · ${p.part}` : ''}`, esc(d.title))}<ol class="pg-list" data-sec="ideas" style="counter-reset: pg ${p.start}">${liList(p.items)}</ol>`;
+    if (p.type === 'traps') return `${head(`Exam watch-outs${p.part ? ` · ${p.part}` : ''}`, 'Do not get caught out')}<ul class="pg-list traps" data-sec="traps">${liList(p.items)}</ul>`;
+    if (p.type === 'formulas') return `${head(`Formulas${p.part ? ` · ${p.part}` : ''}`, 'Know these by heart')}<ul class="pg-formulas" data-sec="formulas">${liList(p.items)}</ul>`;
+    if (p.type === 'example') return `${head('Worked example', 'Put it into practice')}<p class="pg-example" data-sec="example">${esc(d.example)}</p>`;
+    const next = CHAPTERS[c.n];
+    return `
+      <div class="finish">
+        <span class="pg-kicker">Chapter ${c.n} done</span>
+        <h4 class="pg-title">That is the whole chapter</h4>
+        <p class="pg-sub">Check yourself with the videos, then try the tutorial questions.</p>
+        <div class="finish-actions">
+          <button class="btn" type="button" data-go="0">Back to the start</button>
+          <a class="btn ghost" href="#ch-${c.n}/videos">Watch videos</a>
+          ${next ? `<a class="btn ghost" href="#ch-${next.n}/slide">Next: Chapter ${next.n}</a>` : '<a class="btn ghost" href="#papers">Practise with past papers</a>'}
+        </div>
+      </div>`;
+  }
 
   function slidePanel(c) {
     const d = slideData(c);
     const edited = !!user.slides[c.n];
-    const provided = (CONTENT[c.n] && CONTENT[c.n].voice) || [];
+    const pages = buildPages(d);
     return `
-      <div class="slide-bar">
-        <div><h4>Key slide${edited ? '<span class="badge-soft">Edited by you</span>' : ''}</h4><p class="muted">The important points to run through before the exam. Select Edit to change anything.</p></div>
+      <div class="deck-bar">
+        <div><h4>Key slides${edited ? '<span class="badge-soft">Edited by you</span>' : ''}</h4><p class="muted">Flip through the important points. Use the arrows, the dots, swipe, or the arrow keys.</p></div>
         <div class="slide-actions">
+          ${AUDIO[c.n] ? `<button class="btn sm ghost" id="dkAudio" type="button">${dkIcons.head}<span>Listen</span></button>` : ''}
           <button class="btn sm ghost" id="slideEdit" type="button">Edit</button>
           <button class="btn sm ghost" id="slideReset" type="button"${edited ? '' : ' hidden'}>Reset</button>
           <button class="btn sm" id="slidePresent" type="button">Present</button>
         </div>
       </div>
-      <div class="slide" id="slide">
-        <span class="slide-kicker">Chapter ${c.n} · SC2203</span>
-        <h4 class="slide-title">${esc(d.title)}</h4>
-        <p class="slide-sub">${esc(d.sub)}</p>
-        <div class="slide-cols">
-          <section><h5>Key ideas</h5><ul data-sec="ideas">${liList(d.ideas)}</ul></section>
-          <section><h5>Formulas</h5><ul data-sec="formulas" class="mono">${liList(d.formulas)}</ul></section>
-          <section><h5>Exam watch-outs</h5><ul data-sec="traps">${liList(d.traps)}</ul></section>
-        </div>
-        <div class="slide-example"><h5>Worked example</h5><p data-sec="example">${esc(d.example)}</p></div>
-      </div>
-      <div class="panel-grid">
-        <section class="box" id="voiceBox">
-          <h4>Voice explanation</h4>
-          <p class="muted">Listen to a spoken walkthrough of this chapter.</p>
-          ${provided.length
-            ? provided.map((v) => `<figure class="voice"><figcaption>${esc(v.title || 'Voice note')}</figcaption><audio controls preload="none" src="${esc(encodeURI(v.file))}"></audio></figure>`).join('')
-            : '<p class="hint">No voice note has been added for this chapter yet.</p>'}
-          <h5>My recordings</h5>
-          <div class="rec-actions">
-            <button class="btn sm" id="recBtn" type="button">Record</button>
-            <label class="btn sm ghost">Upload audio<input id="recFile" type="file" accept="audio/*"></label>
-            <span class="rec-status" id="recStatus" role="status"></span>
+      <div class="deck" id="deck" tabindex="0" role="region" aria-roledescription="carousel" aria-label="Key slides for chapter ${c.n}">
+        <div class="deck-top"><span class="slide-kicker">Chapter ${c.n} · SC2203</span><span class="deck-count" id="dkCount" aria-live="polite">1 / ${pages.length}</span></div>
+        <div class="deck-view" id="dkView">
+          <div class="deck-track" id="dkTrack">
+            ${pages.map((p, i) => `<section class="pg" data-pg="${i}" aria-roledescription="slide" aria-label="${i + 1} of ${pages.length}: ${esc(p.label)}">${pageHtml(p, c, d)}</section>`).join('')}
           </div>
-          <ul class="rec-list" id="recList"></ul>
-          <p class="hint">Recordings are saved on this device only. Use Download to keep a copy.</p>
-        </section>
-        <section class="box">
-          <h4>My notes</h4>
-          <p class="muted">Add your own points, mnemonics or questions. Saved as you type.</p>
-          <textarea class="notes-box" id="notesBox" placeholder="Write here…" aria-label="My notes for chapter ${c.n}">${esc(user.notes[c.n] || '')}</textarea>
-          <p class="saved" id="notesSaved" role="status"></p>
-        </section>
+        </div>
+        <div class="deck-nav">
+          <button class="deck-arrow" id="dkPrev" type="button" aria-label="Previous slide">${dkIcons.left}</button>
+          <div class="deck-dots" id="dkDots">${pages.map((p, i) => `<button class="dot" type="button" data-go="${i}" aria-label="Go to slide ${i + 1}: ${esc(p.label)}" title="${esc(p.label)}"></button>`).join('')}</div>
+          <button class="deck-arrow" id="dkNext" type="button" aria-label="Next slide">${dkIcons.right}</button>
+        </div>
+        <div class="deck-prog" aria-hidden="true"><i id="dkProg"></i></div>
       </div>`;
   }
 
-  function bindSlide(c) {
-    const slide = $('#slide'); if (!slide) return;
+  function bindDeck(c) {
+    const deck = $('#deck'); if (!deck) return;
+    const track = $('#dkTrack'), pages = $$('.pg', track), n = pages.length;
+    const dots = $$('.dot', deck);
+    deckEditing = false;
+
+    function go(i, instant) {
+      deckIdx = Math.max(0, Math.min(n - 1, i));
+      if (instant) track.style.transition = 'none';
+      track.style.transform = `translateX(-${deckIdx * 100}%)`;
+      if (instant) { void track.offsetWidth; track.style.transition = ''; }
+      pages.forEach((pg, k) => { pg.inert = k !== deckIdx; pg.setAttribute('aria-hidden', String(k !== deckIdx)); });
+      dots.forEach((d, k) => d.setAttribute('aria-current', String(k === deckIdx)));
+      $('#dkCount').textContent = `${deckIdx + 1} / ${n}`;
+      $('#dkProg').style.width = `${((deckIdx + 1) / n) * 100}%`;
+      $('#dkPrev').disabled = deckIdx === 0;
+      $('#dkNext').disabled = deckIdx === n - 1;
+    }
+    deckGo = go;
+    go(Math.min(deckIdx, n - 1), true);
+
+    $('#dkPrev').addEventListener('click', () => go(deckIdx - 1));
+    $('#dkNext').addEventListener('click', () => go(deckIdx + 1));
+    deck.addEventListener('click', (e) => { const g = e.target.closest('[data-go]'); if (g) go(+g.dataset.go); });
+    deck.addEventListener('keydown', (e) => {
+      if (deckEditing) return;
+      if (e.key === 'Home') { e.preventDefault(); go(0); } else if (e.key === 'End') { e.preventDefault(); go(n - 1); }
+    });
+
+    // swipe on touch screens
+    const view = $('#dkView');
+    let sx = 0, sy = 0, tracking = false;
+    view.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' || deckEditing) return; tracking = true; sx = e.clientX; sy = e.clientY; });
+    view.addEventListener('pointerup', (e) => {
+      if (!tracking) return; tracking = false;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) go(deckIdx + (dx < 0 ? 1 : -1));
+    });
+    view.addEventListener('pointercancel', () => { tracking = false; });
+
+    // narration
+    const au = $('#lsAudio');
+    const mini = $('#dkAudio');
+    if (au) {
+      deckAudio = au;
+      const seek = $('#lsSeek');
+      const setPlaying = (on) => {
+        deck.classList.toggle('is-playing', on);
+        $('#lsPlay').setAttribute('aria-label', on ? 'Pause the chapter explanation' : 'Play the chapter explanation');
+        if (mini) { mini.classList.toggle('is-playing', on); mini.querySelector('span').textContent = on ? 'Pause' : 'Listen'; }
+      };
+      const toggle = () => { if (au.paused) au.play().catch(() => toast('The audio could not be played')); else au.pause(); };
+      au.addEventListener('play', () => setPlaying(true));
+      au.addEventListener('pause', () => setPlaying(false));
+      au.addEventListener('ended', () => { setPlaying(false); seek.value = 0; $('#lsCur').textContent = '0:00'; });
+      au.addEventListener('timeupdate', () => { if (au.duration) seek.value = Math.round((au.currentTime / au.duration) * 1000); $('#lsCur').textContent = fmtTime(au.currentTime); });
+      au.addEventListener('loadedmetadata', () => { $('#lsDur').textContent = fmtTime(au.duration); });
+      au.addEventListener('error', () => { $('#lsDur').textContent = 'unavailable'; });
+      seek.addEventListener('input', () => { if (au.duration) au.currentTime = (seek.value / 1000) * au.duration; });
+      $('#lsPlay').addEventListener('click', toggle);
+      if (mini) mini.addEventListener('click', toggle);
+      const speeds = [1, 1.25, 1.5, 0.85];
+      let si = 0;
+      $('#lsSpeed').addEventListener('click', () => { si = (si + 1) % speeds.length; au.playbackRate = speeds[si]; $('#lsSpeed').textContent = `${speeds[si]}×`; });
+      const read = $('#lsRead');
+      if (read) read.addEventListener('click', () => {
+        const box = $('#lsTranscript'); box.hidden = !box.hidden;
+        read.textContent = box.hidden ? 'Read along' : 'Hide transcript';
+        read.setAttribute('aria-expanded', String(!box.hidden));
+      });
+    }
+
+    // editing
     const editBtn = $('#slideEdit');
-    let editing = false;
     const lines = (el) => el.innerText.split('\n').map((t) => t.trim()).filter(Boolean);
     function setEditing(on) {
-      editing = on;
-      slide.classList.toggle('is-editing', on);
+      deckEditing = on;
+      deck.classList.toggle('is-editing', on);
       editBtn.textContent = on ? 'Save' : 'Edit';
       editBtn.classList.toggle('ghost', !on);
-      $$('[data-sec]', slide).forEach((el) => {
-        if (on) { el.setAttribute('contenteditable', 'true'); el.setAttribute('spellcheck', 'true'); } else el.removeAttribute('contenteditable');
-      });
+      $$('[data-sec]', deck).forEach((el) => { if (on) { el.setAttribute('contenteditable', 'true'); el.setAttribute('spellcheck', 'true'); } else el.removeAttribute('contenteditable'); });
       if (on) {
-        $$('ul[data-sec]', slide).forEach((ul) => { if (!ul.children.length) ul.innerHTML = '<li></li>'; });
-        $('[data-sec="ideas"]', slide).focus();
+        if (!$('[data-sec]', pages[deckIdx])) toast('Go to a slide with text to edit it');
+        else $('[data-sec]', pages[deckIdx]).focus();
       }
     }
     editBtn.addEventListener('click', () => {
-      if (!editing) { setEditing(true); return; }
-      user.slides[c.n] = {
-        ideas: lines($('[data-sec="ideas"]', slide)),
-        formulas: lines($('[data-sec="formulas"]', slide)),
-        traps: lines($('[data-sec="traps"]', slide)),
-        example: $('[data-sec="example"]', slide).innerText.trim(),
-      };
-      saveUser(); toast('Slide saved on this device'); renderChapterBody();
+      if (!deckEditing) { setEditing(true); return; }
+      const all = (sec) => $$(`[data-sec="${sec}"]`, deck).flatMap(lines);
+      const ex = $('[data-sec="example"]', deck);
+      user.slides[c.n] = { ideas: all('ideas'), formulas: all('formulas'), traps: all('traps'), example: ex ? ex.innerText.trim() : slideData(c).example };
+      saveUser(); toast('Slides saved on this device'); renderChapterBody();
     });
     $('#slideReset').addEventListener('click', () => {
-      if (!confirm('Reset this slide to the original version? Your edits will be lost.')) return;
+      if (!confirm('Reset these slides to the original version? Your edits will be lost.')) return;
       delete user.slides[c.n]; saveUser(); renderChapterBody();
     });
     $('#slidePresent').addEventListener('click', () => {
-      const req = slide.requestFullscreen || slide.webkitRequestFullscreen;
-      if (req) req.call(slide); else toast('Fullscreen is not supported in this browser');
+      const req = deck.requestFullscreen || deck.webkitRequestFullscreen;
+      if (req) req.call(deck); else toast('Fullscreen is not supported in this browser');
     });
-    slide.addEventListener('paste', (e) => { // keep pasted text plain
-      if (!editing) return;
+    deck.addEventListener('paste', (e) => { // keep pasted text plain
+      if (!deckEditing) return;
       e.preventDefault();
       document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain'));
     });
   }
 
-  function bindNotes(c) {
-    const box = $('#notesBox'); if (!box) return;
-    let t;
-    box.addEventListener('input', () => {
-      clearTimeout(t);
-      t = setTimeout(() => {
-        if (box.value.trim()) user.notes[c.n] = box.value; else delete user.notes[c.n];
-        saveUser(); $('#notesSaved').textContent = 'Saved';
-        setTimeout(() => { const el = $('#notesSaved'); if (el) el.textContent = ''; }, 1500);
-      }, 400);
-    });
+  /* ---- Chapter picker (right-side window) ---- */
+  const picker = $('#picker'), pickBackdrop = $('#pickBackdrop');
+  function renderPicker() {
+    const comp = chapterComplete();
+    $('#pickList').innerHTML = CHAPTERS.map((c) => {
+      const all = RESOURCES.filter((r) => r.ch === c.n);
+      const d = all.filter((r) => done.has(r.id)).length;
+      const nv = ((CONTENT[c.n] && CONTENT[c.n].videos) || []).length;
+      const cur = c.n === curCh;
+      return `<li><a href="#ch-${c.n}/${curTab}" class="${[cur ? 'is-current' : '', comp.has(c.n) ? 'is-complete' : ''].join(' ').trim()}"${cur ? ' aria-current="true"' : ''}><span class="pk-n">${comp.has(c.n) ? checkSvg : c.n}</span><span class="pk-t"><b>${esc(c.title)}</b><small>${d}/${all.length} done · ${nv} videos</small></span></a></li>`;
+    }).join('');
   }
-
-  /* ---- Voice recordings (stored in IndexedDB on this device) ---- */
-  const vdb = (() => {
-    let db;
-    const open = () => (db ? Promise.resolve(db) : new Promise((res, rej) => {
-      if (!('indexedDB' in window)) { rej(new Error('IndexedDB unavailable')); return; }
-      const r = indexedDB.open('vindhi-voice', 1);
-      r.onupgradeneeded = () => r.result.createObjectStore('notes', { keyPath: 'id', autoIncrement: true });
-      r.onsuccess = () => { db = r.result; res(db); };
-      r.onerror = () => rej(r.error);
-    }));
-    const run = async (mode, fn) => {
-      const d = await open();
-      return new Promise((res, rej) => {
-        const t = d.transaction('notes', mode);
-        const req = fn(t.objectStore('notes'));
-        t.oncomplete = () => res(req.result);
-        t.onerror = () => rej(t.error);
-        t.onabort = () => rej(t.error);
-      });
-    };
-    return {
-      all: async (ch) => (await run('readonly', (s) => s.getAll())).filter((r) => r.ch === ch).sort((a, b) => a.created - b.created),
-      add: (rec) => run('readwrite', (s) => s.add(rec)),
-      del: (id) => run('readwrite', (s) => s.delete(id)),
-    };
-  })();
-
-  let recUrls = [];
-  let recorder = null;
-  let recTimer = null;
-  const extFor = (type) => (/mp4|m4a|aac/.test(type) ? 'm4a' : /ogg/.test(type) ? 'ogg' : /mpeg|mp3/.test(type) ? 'mp3' : /wav/.test(type) ? 'wav' : 'webm');
-  const stamp = (t) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-
-  async function renderRecList(n) {
-    const ul = $('#recList'); if (!ul) return;
-    recUrls.forEach((u) => URL.revokeObjectURL(u)); recUrls = [];
-    let items = [];
-    try { items = await vdb.all(n); } catch { const st = $('#recStatus'); if (st) st.textContent = 'Saving recordings is not available in this browser.'; }
-    if (n !== curCh || !$('#recList')) return; // user moved on while loading
-    ul.innerHTML = '';
-    items.forEach((r) => {
-      const url = URL.createObjectURL(r.blob); recUrls.push(url);
-      const li = document.createElement('li'); li.className = 'rec-item';
-      const name = r.name || `Recording, ${stamp(r.created)}`;
-      li.innerHTML = `<div class="rec-top"><span>${esc(name)}</span><div><a class="btn sm ghost" download="vindhi-ch${n}-${r.id}.${extFor(r.type || '')}" href="${url}">Download</a><button class="btn sm ghost" type="button" data-recdel="${r.id}">Delete</button></div></div><audio controls preload="metadata" src="${url}"></audio>`;
-      ul.appendChild(li);
-    });
+  function openPicker() {
+    renderPicker();
+    picker.classList.add('is-open'); pickBackdrop.hidden = false; document.body.style.overflow = 'hidden';
+    $('#pickClose').focus();
   }
-
-  function stopRec() { if (recorder && recorder.state !== 'inactive') recorder.stop(); }
-
-  async function toggleRec(n) {
-    const btn = $('#recBtn'), st = $('#recStatus');
-    if (recorder && recorder.state !== 'inactive') { stopRec(); return; }
-    if (!navigator.mediaDevices || !window.MediaRecorder) { st.textContent = 'Recording is not supported in this browser. Try Upload audio.'; return; }
-    let stream;
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { st.textContent = 'Microphone access was blocked.'; return; }
-    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
-    const chunks = [];
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    recorder = rec;
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    rec.onstop = async () => {
-      clearInterval(recTimer); recorder = null;
-      stream.getTracks().forEach((t) => t.stop());
-      const b = $('#recBtn'); if (b) { b.textContent = 'Record'; b.classList.remove('is-rec'); }
-      const s2 = $('#recStatus'); if (s2) s2.textContent = '';
-      if (!chunks.length) return;
-      try { await vdb.add({ ch: n, blob: new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }), type: rec.mimeType || mime, created: Date.now() }); toast('Recording saved'); } catch { toast('Could not save the recording'); }
-      renderRecList(n);
-    };
-    rec.start();
-    btn.textContent = 'Stop'; btn.classList.add('is-rec');
-    const t0 = Date.now();
-    st.textContent = 'Recording 0:00';
-    recTimer = setInterval(() => { const sec = Math.floor((Date.now() - t0) / 1000); const el = $('#recStatus'); if (el) el.textContent = `Recording ${Math.floor(sec / 60)}:${pad(sec % 60)}`; }, 500);
+  function closePicker() {
+    if (!picker.classList.contains('is-open')) return;
+    picker.classList.remove('is-open'); pickBackdrop.hidden = true; document.body.style.overflow = '';
   }
-
-  function bindVoice(c) {
-    const btn = $('#recBtn'); if (!btn) return;
-    if (!navigator.mediaDevices || !window.MediaRecorder) { btn.disabled = true; btn.title = 'Recording is not supported in this browser'; }
-    btn.addEventListener('click', () => toggleRec(c.n));
-    $('#recFile').addEventListener('change', async (e) => {
-      const f = e.target.files && e.target.files[0]; e.target.value = '';
-      if (!f) return;
-      if (f.size > 40 * 1024 * 1024) { toast('That file is too large (limit 40 MB)'); return; }
-      try { await vdb.add({ ch: c.n, blob: f, type: f.type, name: f.name, created: Date.now() }); toast('Audio added'); } catch { toast('Could not save the audio'); }
-      renderRecList(c.n);
-    });
-    renderRecList(c.n);
-  }
+  $('#pickClose').addEventListener('click', closePicker);
+  pickBackdrop.addEventListener('click', closePicker);
 
   /* ---- Render ---- */
   function renderChapterBody() {
+    if (deckAudio) { deckAudio.pause(); deckAudio = null; }
+    deckGo = null; deckEditing = false;
     const c = CHAPTERS[curCh - 1];
     const all = RESOURCES.filter((r) => r.ch === c.n);
     const d = all.filter((r) => done.has(r.id)).length;
@@ -769,7 +814,15 @@
     const panel = curTab === 'slide' ? slidePanel(c) : curTab === 'videos' ? videosPanel(c) : docsPanel(c);
     $('#chapterBody').innerHTML = `
       <article class="ch-hero" data-sym="${esc(c.sym)}">
-        <div class="ch-top"><span class="ch-badge">Chapter ${c.n}</span><span class="ch-count">${d}/${all.length} done</span></div>
+        <div class="ch-top">
+          <span class="ch-badge">Chapter ${c.n}</span>
+          <div class="ch-tools">
+            <span class="ch-count">${d}/${all.length} done</span>
+            <button class="pick-btn" type="button" data-pick aria-haspopup="dialog" aria-label="Choose a chapter" title="Choose a chapter">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+          </div>
+        </div>
         <h3 class="ch-title">${esc(c.title)}</h3>
         <p class="ch-blurb">${esc(c.blurb)}</p>
         <div class="topics">${c.topics.map((t) => `<span class="topic">${esc(t)}</span>`).join('')}</div>
@@ -779,28 +832,17 @@
         ${TABS.map(([k, label]) => `<a href="#ch-${c.n}/${k}"${curTab === k ? ' aria-current="page"' : ''}>${label}${counts[k] !== '' ? `<span class="tab-n">${counts[k]}</span>` : ''}</a>`).join('')}
       </nav>
       <div class="tab-panel" id="tabPanel">${panel}</div>`;
-    if (curTab === 'slide') { bindSlide(c); bindNotes(c); bindVoice(c); }
+    if (curTab === 'slide') bindDeck(c);
   }
 
   function showChapter(n, tab) {
     const chapterChanged = n !== curCh;
-    if ((chapterChanged || tab !== curTab) && recorder) stopRec();
+    if (chapterChanged) deckIdx = 0;
     curCh = n; curTab = tab; user.tab = tab; saveUser();
-    $('#chSelect').value = String(n);
-    $('#chPrev').disabled = n <= 1;
-    $('#chNext').disabled = n >= CHAPTERS.length;
     renderChapterBody();
     setActiveChapter(n);
     return chapterChanged;
   }
-
-  (function chapterControls() {
-    $('#chSelect').innerHTML = CHAPTERS.map((c) => `<option value="${c.n}">${c.n}. ${esc(c.title)}</option>`).join('');
-    const go = (n) => { location.hash = `#ch-${n}/${curTab}`; };
-    $('#chSelect').addEventListener('change', (e) => go(+e.target.value));
-    $('#chPrev').addEventListener('click', () => go(Math.max(1, curCh - 1)));
-    $('#chNext').addEventListener('click', () => go(Math.min(CHAPTERS.length, curCh + 1)));
-  })();
 
   function route() {
     const h = decodeURIComponent(location.hash.slice(1));
@@ -817,6 +859,7 @@
       setActiveChapter(null);
     }
     closeDrawer();
+    closePicker();
   }
 
   function setActiveChapter(n) { if (n !== activeChapter) { activeChapter = n; renderSidebarChapters(); } }
@@ -834,7 +877,22 @@
   openBtn.addEventListener('click', openDrawer);
   $('#sbClose').addEventListener('click', () => { closeDrawer(); openBtn.focus(); });
   backdrop.addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sidebar.classList.contains('is-open')) { closeDrawer(); openBtn.focus(); } });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (picker.classList.contains('is-open')) { closePicker(); return; }
+      if (sidebar.classList.contains('is-open')) { closeDrawer(); openBtn.focus(); }
+    }
+  });
+  // arrow keys flip the key slides
+  document.addEventListener('keydown', (e) => {
+    if (!deckGo || deckEditing || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const t = e.target;
+    if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+    if (viewer.open || picker.classList.contains('is-open') || sidebar.classList.contains('is-open')) return;
+    e.preventDefault();
+    deckGo(deckIdx + (e.key === 'ArrowRight' ? 1 : -1));
+  });
 
   /* ================= Init ================= */
   renderPlan();
