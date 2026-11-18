@@ -1,6 +1,6 @@
 # Vindhi
 
-A clean study website for **SC2203 Biostatistics**: lecture notes, tutorials and past papers in one place, with an exam countdown, a 4-day study plan, a progress tracker, an interactive normal curve and a formula sheet.
+A clean study website for **SC2203 Biostatistics**: lecture notes, tutorials and past papers in one place, with an exam countdown, a 4-day study plan, a progress tracker, an interactive normal curve and a formula sheet. Each chapter has a workspace with three tabs: Documents, an editable Key slide (with voice notes and personal notes) and Videos (curated YouTube lessons plus your own links).
 
 Plain HTML, CSS and JavaScript. There is no build step and nothing to install.
 
@@ -11,11 +11,14 @@ Plain HTML, CSS and JavaScript. There is no build step and nothing to install.
 ├── index.html                 # the website
 ├── assets/
 │   ├── css/style.css          # styling (light and dark themes)
-│   └── js/app.js              # content data + all interactivity
+│   └── js/
+│       ├── app.js             # interactivity (sidebar, chapters, slide editor, voice notes)
+│       └── content.js         # per-chapter videos, key slides and voice notes
 ├── materials/
 │   ├── lecture-notes/         # ch01 … ch07 PDFs
 │   ├── tutorials/             # tutorial-01 … tutorial-05
-│   └── past-papers/           # mid-sem and end-sem 2024 / 2025
+│   ├── past-papers/           # mid-sem and end-sem 2024 / 2025
+│   └── voice-notes/           # audio walkthroughs (see its README)
 └── _archive/                  # original zip (not published)
 ```
 
@@ -30,6 +33,7 @@ Then open <http://localhost:5173>.
 ## Change things
 
 - **Exam date/time:** edit `CONFIG.examDate` at the top of `assets/js/app.js`.
+- **Videos, key slides, voice notes:** edit `assets/js/content.js`. Videos use the 11-character YouTube id.
 - **Add a PDF:** drop it in the right `materials/` folder, then add one line to `RESOURCES` in `assets/js/app.js`.
 - **Study plan and formula cards:** edit `PLAN` and `FORMULAS` in the same file.
 
